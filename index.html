@@ -59,6 +59,9 @@ form,.bar{display:flex;gap:8px;padding:10px 16px calc(10px + 2px);border-top:1px
 <div class="note">AI answers can have errors. Cross-check with your official SPPU syllabus and textbooks.</div>
 
 <script>
+// Your Cloudflare Worker (it holds the secret API key, so no key lives in this file)
+const WORKER_URL="https://sppu-proxy.sohamdabade71.workers.dev/";
+
 const SUBJ={
 FE:{"Common (All branches)":["Engineering Mathematics-I","Engineering Mathematics-II","Engineering Physics","Engineering Chemistry","Basic Electrical Engineering","Basic Electronics Engineering","Programming &amp; Problem Solving (C)","Engineering Mechanics","Engineering Graphics","Systems in Mechanical Engineering","Environmental Studies"]},
 SE:{"Computer":["Discrete Mathematics","Fundamentals of Data Structures","Object Oriented Programming","Computer Graphics","Digital Electronics &amp; Logic Design","Data Structures &amp; Algorithms","Software Engineering","Microprocessor","Principles of Programming Languages"],
@@ -100,14 +103,16 @@ return base+"\n\nTask: "+m}
 function suggest(){const d=document.createElement("div");d.className="sug";["Important questions for this subject","Explain the most scoring topic","Give me a quick quiz"].forEach((t,i)=>{const b=document.createElement("button");b.className="chip";b.textContent=t;b.onclick=()=>{mode=["imp","explain","quiz"][i];renderModes();hints();$("q").value=i===0?"Whole subject":i===1?"Most scoring topic":"Mixed topics";$("f").requestSubmit()};d.appendChild(b)});$("chat").appendChild(d)}
 async function send(e){e.preventDefault();if(busy)return;const q=$("q").value.trim();if(!q&&mode==="ask")return;
 const text=q||"Whole subject";add("me",MODES[mode]+": "+text);$("q").value="";busy=true;$("go").disabled=true;
-const out=add("bot","Thinking… (tap Allow if asked)");
-try{const sample=window.claude?await window.claude.use("sample"):null;if(!sample){out.textContent="The AI isn’t available in this view. Open this link inside claude.ai (signed in) and try again.";return}
-const msgs=[];const recent=hist.slice(-4);
+const out=add("bot","Thinking…");
+try{
+const recent=hist.slice(-4);
 const prompt=system()+"\n\n"+(recent.length?"Earlier in this chat:\n"+recent.map(h=>h.r+": "+h.t).join("\n")+"\n\n":"")+"Student input: "+text;
-msgs.push({role:"user",content:prompt});
-const r=await sample(msgs,{cache:false,modelTier:"quick",onText:({text:t})=>{out.innerHTML=md(t);$("chat").scrollTop=1e9}});
-out.innerHTML=md(r.text);hist.push({r:"Student",t:text},{r:"Tutor",t:r.text.slice(0,600)});
-}catch(err){const c=(err&&err.code)||"unknown";const m={rate_limited:"Too many requests or usage limit reached – wait a bit and try again.",not_granted:"Access was declined. Reload the page and tap Allow when asked.",sampling_disabled:"Claude isn’t enabled for this account or organization.",session_expired:"Please sign in to Claude again, then retry.",empty_completion:"No answer came back. Try rephrasing your question.",refused:"That request was declined. Try rephrasing."}[c]||"Something went wrong. Please try again.";out.textContent=(err&&err.text?err.text+"\n\n":"")+m+" (code: "+c+(err&&err.message&&c==="unknown"?" – "+String(err.message).slice(0,120):"")+")"}
+const res=await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
+let d=null;try{d=await res.json()}catch(_){}
+if(!res.ok||!d||d.error||!d.text){throw new Error((d&&d.error)||("HTTP "+res.status))}
+out.innerHTML=md(d.text);
+hist.push({r:"Student",t:text},{r:"Tutor",t:d.text.slice(0,600)});
+}catch(err){out.textContent="Sorry, I couldn’t get an answer right now. Please wait a moment and try again. ("+String(err&&err.message||err).slice(0,140)+")"}
 finally{busy=false;$("go").disabled=false;$("chat").scrollTop=1e9}}
 // marks selector inserted in controls
 const mkWrap=document.createElement("div");mkWrap.className="full";mkWrap.innerHTML='<label for="mk">Answer length (marks)</label><select id="mk">'+MARKS.map(m=>`<option value="${m}"${m==="5"?" selected":""}>${m} marks</option>`).join("")+"</select>";

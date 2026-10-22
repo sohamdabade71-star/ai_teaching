@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SPPU Study Agent – FE &amp; SE</title>
+<style>
+:root{--bg:#f7f6f2;--card:#fff;--ink:#1d1d1b;--mute:#6b6a64;--line:#e3e1d8;--acc:#c2410c;--accbg:#fff1e8;--me:#1d1d1b;--meink:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161614;--card:#211f1d;--ink:#f1efe8;--mute:#9b988d;--line:#34312d;--acc:#fb923c;--accbg:#2d2118;--me:#f1efe8;--meink:#161614}}
+:root[data-theme="dark"]{--bg:#161614;--card:#211f1d;--ink:#f1efe8;--mute:#9b988d;--line:#34312d;--acc:#fb923c;--accbg:#2d2118;--me:#f1efe8;--meink:#161614}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column}
+header{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
+h1{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+.sub{color:var(--mute);font-size:13px;margin:0}
+.ctl{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.ctl label{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:2px}
+select,textarea,input{width:100%;font:inherit;font-size:15px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.full{grid-column:1/-1}
+.modes{display:flex;gap:6px;overflow-x:auto;padding:10px 16px 2px}
+.chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
+.chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+#chat{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:92%;padding:10px 13px;border-radius:14px;word-wrap:break-word;overflow-wrap:anywhere}
+.bot{background:var(--card);border:1px solid var(--line);align-self:flex-start}
+.me{background:var(--me);color:var(--meink);align-self:flex-end}
+.msg p{margin:0 0 8px}.msg p:last-child{margin:0}
+.msg ul,.msg ol{margin:4px 0 8px;padding-left:20px}
+.msg pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;overflow-x:auto;font-size:13px}
+.msg code{font-family:ui-monospace,Menlo,monospace;font-size:.9em}
+.sug{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.sug .chip{background:var(--accbg);border-color:transparent;color:var(--acc);text-align:left}
+form,.bar{display:flex;gap:8px;padding:10px 16px calc(10px + 2px);border-top:1px solid var(--line);background:var(--bg)}
+#q{resize:none;height:44px;max-height:120px}
+#go{flex:none;border:0;border-radius:10px;background:var(--acc);color:#fff;font-weight:600;padding:0 16px;cursor:pointer;font-size:15px}
+#go:disabled{opacity:.5}
+.note{font-size:11px;color:var(--mute);text-align:center;padding:0 16px 8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>SPPU Study Agent</h1>
+  <p class="sub">FE &amp; SE exam prep · Ask doubts, get model answers</p>
+</header>
+<div class="ctl">
+  <div><label for="yr">Year</label><select id="yr"><option>FE</option><option>SE</option></select></div>
+  <div><label for="br">Branch</label><select id="br"></select></div>
+  <div class="full"><label for="sub">Subject</label><select id="sub"></select></div>
+  <div class="full" id="cw" hidden><label for="cs">Type subject / unit name</label><input id="cs" placeholder="e.g. Unit 3 – Laplace Transform"></div>
+</div>
+<div class="modes" id="modes"></div>
+<div id="chat"></div>
+<form id="f">
+  <textarea id="q" rows="1" placeholder="Ask any syllabus question…"></textarea>
+  <button id="go" type="submit">Ask</button>
+</form>
+<div class="note">AI answers can have errors. Cross-check with your official SPPU syllabus and textbooks.</div>
+
+<script>
+const SUBJ={
+FE:{"Common (All branches)":["Engineering Mathematics-I","Engineering Mathematics-II","Engineering Physics","Engineering Chemistry","Basic Electrical Engineering","Basic Electronics Engineering","Programming &amp; Problem Solving (C)","Engineering Mechanics","Engineering Graphics","Systems in Mechanical Engineering","Environmental Studies"]},
+SE:{"Computer":["Discrete Mathematics","Fundamentals of Data Structures","Object Oriented Programming","Computer Graphics","Digital Electronics &amp; Logic Design","Data Structures &amp; Algorithms","Software Engineering","Microprocessor","Principles of Programming Languages"],
+"IT":["Discrete Mathematics","Logic Design &amp; Computer Organization","Data Structures &amp; Algorithms","Object Oriented Programming","Basics of Computer Network","Processor Architecture","Database Management Systems","Software Engineering"],
+"E&amp;TC":["Engineering Mathematics-III","Electronic Circuits","Digital Circuits","Signals &amp; Systems","Electrical Circuits","Control Systems","Analog Communication","Data Structures"],
+"Mechanical":["Engineering Mathematics-III","Solid Mechanics","Fluid Mechanics","Engineering Thermodynamics","Manufacturing Processes","Material Science","Theory of Machines"],
+"Civil":["Engineering Mathematics-III","Strength of Materials","Fluid Mechanics","Surveying","Building Construction","Engineering Geology","Structural Analysis"]}};
+const MODES={ask:"Ask a doubt",imp:"Important exam Qs",quiz:"Quick quiz",explain:"Explain simply",sum:"Unit summary"};
+const MARKS=["2","5","8","10"];
+let mode="ask",busy=false,hist=[];
+const $=id=>document.getElementById(id);
+const dec=s=>{const t=document.createElement("textarea");t.innerHTML=s;return t.value};
+function fillBr(){const b=$("br");b.innerHTML="";Object.keys(SUBJ[$("yr").value]).forEach(k=>{const o=document.createElement("option");o.innerHTML=k;b.appendChild(o)});fillSub()}
+function fillSub(){const s=$("sub");s.innerHTML="";const list=SUBJ[$("yr").value][dec($("br").value)]||SUBJ[$("yr").value][Object.keys(SUBJ[$("yr").value])[$("br").selectedIndex]]||[];list.forEach(x=>{const o=document.createElement("option");o.innerHTML=x;s.appendChild(o)});const o=document.createElement("option");o.value="__c";o.textContent="Other (type it)";s.appendChild(o);tog()}
+function tog(){$("cw").hidden=$("sub").value!=="__c"}
+function subj(){return $("sub").value==="__c"?($("cs").value.trim()||"General"):dec($("sub").value)}
+function renderModes(){const m=$("modes");m.innerHTML="";Object.entries(MODES).forEach(([k,v])=>{const b=document.createElement("button");b.type="button";b.className="chip"+(k===mode?" on":"");b.textContent=v;b.onclick=()=>{mode=k;renderModes();hints()};m.appendChild(b)});}
+const HINT={ask:"Ask any syllabus question…",imp:"Unit or topic (or leave blank for whole subject)",quiz:"Topic for a 5-question quiz",explain:"Concept to explain simply",sum:"Which unit to summarise?"};
+function hints(){$("q").placeholder=HINT[mode]}
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function inline(s){return esc(s).replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<i>$2</i>")}
+function md(t){const parts=t.split(/```/);let out="";parts.forEach((p,i)=>{if(i%2){out+="<pre><code>"+esc(p.replace(/^\w*\n/,""))+"</code></pre>";return}
+let html="",list=null;p.split("\n").forEach(l=>{const ul=l.match(/^\s*[-*•]\s+(.*)/),ol=l.match(/^\s*\d+[.)]\s+(.*)/),h=l.match(/^#{1,4}\s+(.*)/);
+if(ul||ol){const tag=ul?"ul":"ol";if(list!==tag){if(list)html+="</"+list+">";html+="<"+tag+">";list=tag}html+="<li>"+inline((ul||ol)[1])+"</li>";return}
+if(list){html+="</"+list+">";list=null}
+if(h)html+="<p><b>"+inline(h[1])+"</b></p>";else if(l.trim())html+="<p>"+inline(l)+"</p>"});
+if(list)html+="</"+list+">";out+=html});return out}
+function add(role,text){const d=document.createElement("div");d.className="msg "+(role==="me"?"me":"bot");if(role==="me")d.textContent=text;else d.innerHTML=md(text);$("chat").appendChild(d);$("chat").scrollTop=1e9;return d}
+function system(){
+const yr=$("yr").value,br=dec($("br").value),sb=subj();
+const base=`You are an exam-prep tutor for Savitribai Phule Pune University (SPPU) ${yr==="FE"?"First Year (FE) Engineering":"Second Year (SE) Engineering"} students${yr==="SE"?` in ${br}`:""}. Subject: ${sb}. Follow the SPPU syllabus, unit structure and exam pattern (In-Sem 30 marks, End-Sem 70 marks; typical question marks 2/3/5/6/8). Be accurate; if unsure whether a topic is in the current syllabus, say so briefly. Use simple English, short paragraphs, and bullet points.`;
+const m={
+ask:`Answer the student's question like a model SPPU answer. Default to a ${$("mk")?.value||"5"}-mark style answer: definition, key points or steps, formula/diagram description or example, and a one-line conclusion. Add a "Exam tip" line at the end.`,
+imp:`List 8-10 likely and frequently repeated SPPU exam questions for the given unit/topic, each tagged with marks. Then give a short model answer outline (3-4 bullets) for the top 3.`,
+quiz:`Create a 5-question quiz (mix of MCQ and short answers) on the topic. Give questions first, then an "Answers" section after a line break.`,
+explain:`Explain the concept in very simple language with one everyday analogy and one small example. Then give 2 quick check questions.`,
+sum:`Give a concise unit summary: key topics, important formulas/definitions, and the 5 most exam-relevant points.`}[mode];
+return base+"\n\nTask: "+m}
+function suggest(){const d=document.createElement("div");d.className="sug";["Important questions for this subject","Explain the most scoring topic","Give me a quick quiz"].forEach((t,i)=>{const b=document.createElement("button");b.className="chip";b.textContent=t;b.onclick=()=>{mode=["imp","explain","quiz"][i];renderModes();hints();$("q").value=i===0?"Whole subject":i===1?"Most scoring topic":"Mixed topics";$("f").requestSubmit()};d.appendChild(b)});$("chat").appendChild(d)}
+async function send(e){e.preventDefault();if(busy)return;const q=$("q").value.trim();if(!q&&mode==="ask")return;
+const text=q||"Whole subject";add("me",MODES[mode]+": "+text);$("q").value="";busy=true;$("go").disabled=true;
+const out=add("bot","Thinking… (tap Allow if asked)");
+try{const sample=window.claude?await window.claude.use("sample"):null;if(!sample){out.textContent="The AI isn’t available in this view. Open this link inside claude.ai (signed in) and try again.";return}
+const msgs=[];const recent=hist.slice(-4);
+const prompt=system()+"\n\n"+(recent.length?"Earlier in this chat:\n"+recent.map(h=>h.r+": "+h.t).join("\n")+"\n\n":"")+"Student input: "+text;
+msgs.push({role:"user",content:prompt});
+const r=await sample(msgs,{cache:false,modelTier:"quick",onText:({text:t})=>{out.innerHTML=md(t);$("chat").scrollTop=1e9}});
+out.innerHTML=md(r.text);hist.push({r:"Student",t:text},{r:"Tutor",t:r.text.slice(0,600)});
+}catch(err){const c=(err&&err.code)||"unknown";const m={rate_limited:"Too many requests or usage limit reached – wait a bit and try again.",not_granted:"Access was declined. Reload the page and tap Allow when asked.",sampling_disabled:"Claude isn’t enabled for this account or organization.",session_expired:"Please sign in to Claude again, then retry.",empty_completion:"No answer came back. Try rephrasing your question.",refused:"That request was declined. Try rephrasing."}[c]||"Something went wrong. Please try again.";out.textContent=(err&&err.text?err.text+"\n\n":"")+m+" (code: "+c+(err&&err.message&&c==="unknown"?" – "+String(err.message).slice(0,120):"")+")"}
+finally{busy=false;$("go").disabled=false;$("chat").scrollTop=1e9}}
+// marks selector inserted in controls
+const mkWrap=document.createElement("div");mkWrap.className="full";mkWrap.innerHTML='<label for="mk">Answer length (marks)</label><select id="mk">'+MARKS.map(m=>`<option value="${m}"${m==="5"?" selected":""}>${m} marks</option>`).join("")+"</select>";
+document.querySelector(".ctl").appendChild(mkWrap);
+$("yr").onchange=fillBr;$("br").onchange=fillSub;$("sub").onchange=tog;$("f").onsubmit=send;
+$("q").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("f").requestSubmit()}});
+fillBr();renderModes();
+add("bot","Hi! I’m your SPPU study agent. Pick your year, branch and subject, then ask a doubt, get important questions, a quick quiz or a unit summary.");
+suggest();
+</script>
+</body>
+</html>
